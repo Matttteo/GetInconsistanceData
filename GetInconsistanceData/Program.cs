@@ -10,11 +10,7 @@ namespace GetInconsistanceData
     {
         static void Main(string[] args)
         {
-            string url = "https://protodoc.visualstudio.com/defaultcollection";
-            string name = "protodoc";
-            string uname = "t-yubai@microsoft.com";
-            string psw = "7grcdbkdbxr2fg5y3nwlcpksqjdqelmxz2rlauuo5cr5os7yrk4q";
-            Client c = new Client(url, name, uname, psw);
+            Client c = new Client();
             c.SampleREST();
             return;
         }
