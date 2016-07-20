@@ -16,6 +16,7 @@ using Microsoft.VisualStudio.Services.Client;
 using Microsoft.VisualStudio.Services.Common;
 
 using System.Configuration;
+using System.Text.RegularExpressions;
 using System.Collections.Specialized;
 namespace GetInconsistanceData
 {
@@ -27,6 +28,7 @@ namespace GetInconsistanceData
         private static string password;
         private static string queryName;
         private static List<string> itemUrls;
+        private static List<int> itemIds;
         private static string fileName;
         private static VssConnection connection;
         private static WorkItemTrackingHttpClient witClient;
@@ -42,6 +44,8 @@ namespace GetInconsistanceData
             password = ConfigurationManager.AppSettings.Get("password");
             queryName = ConfigurationManager.AppSettings.Get("queryName");
             fileName = ConfigurationManager.AppSettings.Get("fileName");
+            itemUrls = new List<string>();
+            itemIds = new List<int>();
             // Create a connection object, which we will use to get httpclient objects.  This is more robust
             // then newing up httpclient objects directly.  Be sure to send in the full collection uri.
             // For example:  http://myserver:8080/tfs/defaultcollection
@@ -90,6 +94,7 @@ namespace GetInconsistanceData
                             foreach (WorkItem workItem in workItems)
                             {
                                 itemUrls.Add(workItem.Url);
+                                itemIds.Add(workItem.Id.Value);
                             }
                         }
                         skip += batchSize;
@@ -102,46 +107,56 @@ namespace GetInconsistanceData
                 }
             }
         }
-        public static string getHistoryUrl(HtmlDocument itemDoc)
+        public static string getHistoryUrl(string text)
         {
-            //TODO
-            return "";
+            const string re = @"(""workItemHistory"":{""href"":"")(https:\/\/[\w.\/]+)";
+            Regex reg = new Regex(re);
+            Match urlMatch = reg.Match(text);
+            if(urlMatch.Success && urlMatch.Groups.Count > 0)
+            {
+                string url = urlMatch.Groups[2].Value;
+                return url;
+            }
+            else return "";
         }
-        public static string getText(HtmlDocument itemDoc)
+        public static string getText(string itemDoc)
         {
             //TODO
-            return "";
+
+            return itemDoc;
         }
-        public static void writeFile(string text)
+        public static void writeFile(string text, int id)
         {
             //TODO
+            string filename = fileName + id;
             using (System.IO.StreamWriter file =
-                new System.IO.StreamWriter(@fileName))
+                new System.IO.StreamWriter(filename))
             {
                 file.WriteLine(text);
             }
         }
-        public static void getHistoryText()
+        public void getHistoryText()
         {
             getItemUrls();
-            //using (WebClient client = new WebClient())
-            //{
-            //    foreach(string url in itemUrls)
-            //    {
-            //        string htmlCode = client.DownloadString(url);
-            //        string historyUrl = getHistoryUrl(htmlCode);
-            //        string historyText = client.DownloadString(historyUrl);
+            WebClient webClient = new WebClient();
 
-            //    }
-            //}
-            foreach(string url in itemUrls)
+            string credentials = Convert.ToBase64String(Encoding.ASCII.GetBytes(userName + ":" + password));
+            webClient.Headers[HttpRequestHeader.Authorization] = "Basic " + credentials;
+            for (int i = 0; i < itemUrls.Count; ++i)
             {
-                HtmlWeb web = new HtmlWeb();
-                HtmlDocument itemDoc = web.Load(url);
-                string historyUrl = getHistoryUrl(itemDoc);
-                HtmlDocument historyDoc = web.Load(historyUrl);
-                string text = getText(historyDoc);
-                writeFile(text);
+                string url = itemUrls[i];
+                int id = itemIds[i];
+                string text = webClient.DownloadString(url);
+                string historyUrl = getHistoryUrl(text);
+                if (historyUrl.Length == 0)
+                {
+                    Console.WriteLine("can't find history url.");
+                    return;
+                }
+                string historyHtml = webClient.DownloadString(historyUrl);
+                string rawText = getText(historyHtml);
+                Console.WriteLine("Get histroy text of ID:{0} .", id);
+                writeFile(rawText, id);
             }
         }
         public void BasicAuthRestSample()
